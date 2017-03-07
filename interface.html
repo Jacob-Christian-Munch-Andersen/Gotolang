@@ -1,0 +1,347 @@
+<!doctype html>
+<html>
+<head>
+	<meta charset="utf-8">
+<style>
+	*{
+		box-sizing:border-box;
+		font: 12px courier;
+	}
+	#inputcontainer{
+		position:fixed;
+		height:50%;
+		width:240px;
+		left:20px;
+		top:0;
+		padding:20px 0 40px;
+	}
+	#outputcontainer{
+		position:fixed;
+		height:50%;
+		width:240px;
+		left:20px;
+		bottom:0;
+		padding:40px 0 20px;
+	}
+	#buttoncontainer{
+		position:fixed;
+		height:40px;
+		top:50%;
+		left:20px;
+		width:240px;
+		margin-top:-20px;
+	}
+	#codecontainer{
+		//width:auto;
+		//height:100%;
+		position:fixed;
+		right:540px;
+		top:20px;
+		bottom:20px;
+		left:280px;
+		//display:inline-block;
+		//background-color:red;
+	}
+	#messagecontainer{
+		position:fixed;
+		right:20px;
+		top:20px;
+		bottom:20px;
+		width:500px;
+		overflow:auto;
+		white-space:pre-wrap;
+	}
+	textarea{
+		width:100%;
+		height:100%;
+	}
+	button{
+		width:40px;
+		height:40px;
+	}
+	.settingsblock{
+		display:inline-block;
+		width:60px;
+		height:20px;
+		font:12px/20px arial;
+	}
+	.wide{
+		width:75px;
+	}
+	.narrow{
+		width:45px;
+	}
+	#topsettings{
+		position:absolute;
+		top:0;
+		right:0;
+	}
+	#bottomsettings{
+		position:absolute;
+		bottom:0;
+		right:0;
+	}
+	input{
+		margin:0;
+	}
+	.errordiv{
+		color:red;
+	}
+</style>
+</head>
+<body>
+<div id="inputcontainer"><textarea id="inarea" oninput="statechanged()" onchange="statechanged()" spellcheck="false"></textarea></div>
+<div id="outputcontainer"><textarea id="outarea" readonly spellcheck="false"></textarea></div>
+<div id="buttoncontainer">
+	<button onclick="clickrun()">Run</button>
+	<div id="topsettings">
+		<div class="settingsblock narrow">Input:</div><label class="settingsblock"><input type="radio" name="intype" value="string" checked id="intypestring" onchange="statechanged()">String</label><label class="settingsblock wide"><input type="radio" name="intype" value="numbers" id="intypenumber" onchange="statechanged()">Numbers</label>
+	</div>
+	<div id="bottomsettings">
+		<div class="settingsblock narrow">Output:</div><label class="settingsblock"><input type="radio" name="outtype" value="string" checked id="outtypestring" onchange="statechanged()">String</label><label class="settingsblock wide"><input type="radio" name="outtype" value="numbers" id="outtypenumber" onchange="statechanged()">Numbers</label>
+	</div>
+</div>
+<div id="codecontainer"><textarea id="codeinput" spellcheck="false" oninput="statechanged()" onchange="statechanged()" onkeydown="keydowncode(event)"></textarea></div>
+<pre id="messagecontainer"></pre>
+<script src="gotolang.js"></script>
+<script src="dom.js"></script>
+<script src="kissc.js"></script>
+<script>
+	dom.globalScope()
+	try{
+		var hashvalues=JSON.parse(kissc.decompress(location.hash.slice(1)))
+		if(hashvalues){
+			document.getElementById("intypenumber").checked=!hashvalues[0]
+			document.getElementById("outtypenumber").checked=!hashvalues[1]
+			document.getElementById("codeinput").value=hashvalues[2]
+			document.getElementById("inarea").value=hashvalues[3]
+		}
+	}
+	catch(e){
+	
+	}
+	function clickrun(){
+		var a
+		var output=[]
+		var writeout=0
+		var inisstring=document.getElementById("intypestring").checked
+		var outisstring=document.getElementById("outtypestring").checked
+		var code=document.getElementById("codeinput").value
+		var input=document.getElementById("inarea").value
+		var inarray=[]
+		var nextin=0
+		if(inisstring){
+			for(a=0;a<input.length;a++){
+				if(input.charCodeAt(a)&0xfc00===0xd800 && input.charCodeAt(a+1)&0xfc00===0xdc00){
+					inarray.push(0x10000+(input.charCodeAt(a)-0xd800)<<10+input.charCodeAt(a+1)-0xdc00)
+					a++
+				}
+				else if(input.charCodeAt(a)===13 && input.charCodeAt(a+1)===10){
+				
+				}
+				else{
+					inarray.push(0|+input.charCodeAt(a))
+				}
+			}
+		}
+		else{
+			var inputsplit=input.replace(/[\,\ \r\n]+/g," ").split(" ")
+			for(a=0;a<inputsplit.length;a++){
+				inarray.push(0|+inputsplit[a])
+			}
+		}
+		var program=parse(code,{out:{fn:out,args:1},"in":{fn:datain,args:0},numberout:{fn:numberout,args:1},random:{fn:randomlimit,args:1}})
+		program.cmdlimit=100000000
+		program.memorylimit=1000000
+		program.depthlimit=1000
+		var errorcontainer
+		var statcontainer
+		document.getElementById("messagecontainer").appendChild(FRAGMENT(errorcontainer=DIV("Running"),statcontainer=DIV("\n\n")))
+		program.onend=function(e){
+			dowriteout()
+			if(e){
+				errorcontainer.innerHTML=""
+				errorcontainer.appendChild(FRAGMENT(e))
+				errorcontainer.className="errordiv"
+			}
+			else{
+				errorcontainer.innerHTML="Done"
+			}
+			program.onbatch()
+			document.getElementById("messagecontainer").scrollTop=1000000
+			//console.log(program)
+		}
+		program.onbatch=function(){
+			statcontainer.innerHTML=""
+			if(program.hasOwnProperty("cmd")){
+				var score=program.codelength*program.cmd*(program.codelength+program.maxmemory)
+				statcontainer.appendChild(FRAGMENT("Code size: "+program.codelength+"\nClocks: "+program.cmd+"\nMemory: "+program.maxmemory+"\nScore: "+score+"\n\n"))
+			}
+		}
+		program.onbatch()
+		document.getElementById("messagecontainer").scrollTop=1000000
+		var random=xs128p()
+		run(program)
+		function randomlimit(cb,limit){
+			if(limit<2){
+				return cb(0)
+			}
+			else{
+				return cb(random(limit))
+			}
+		}
+		function datain(cb){
+			if(nextin<inarray.length){
+				return cb(inarray[nextin++])
+			}
+			else{
+				return cb(0)
+			}
+		}
+		function out(cb,value){
+			if(outisstring){
+				if(value<0){
+				
+				}
+				else if(value<0x10000){
+					output.push(String.fromCharCode(value))
+				}
+				else if(value<0x110000){
+					output.push(String.fromCharCode((value>>10)+0xd7c0,(value&0x3ff)+0xdc00))
+				}
+			}
+			else{
+				output.push(value+", ")
+			}
+			if(!writeout && output.length<10000){
+				writeout=setTimeout(dowriteout,1)
+			}
+			return cb(0)
+		}
+		function numberout(cb,value){
+			value=value.toString()
+			var a
+			for(a=0;a<value.length;a++){
+				out(function(){},value.charCodeAt(a))
+			}
+			return cb(0)
+		}
+		function dowriteout(){
+			writeout=0
+			document.getElementById("outarea").value=output.join("")
+		}
+	}
+	function keydowncode(e){
+		var keycode=e.keyCode
+		//var selection=getSelection()
+		var codeinput=document.getElementById("codeinput")
+		/*if(selection.anchorNode!==codeinput || selection.focusNode!==codeinput){
+			console.log(selection.anchorNode)
+			console.log(codeinput)
+			return
+		}*/
+		var selectionstart=codeinput.selectionStart
+		var selectionend=codeinput.selectionEnd
+		var code
+		var linestart
+		var a
+		//console.log(selectionstart+" "+selectionend)
+		if(keycode===9){
+			code=codeinput.value
+			linestart=code.lastIndexOf("\n",selectionstart-1)+1
+			var lineend=code.indexOf("\n",selectionend)
+			if(lineend===-1){
+				lineend=code.length
+			}
+			if(code.charCodeAt(lineend-1)===13){
+				lineend--
+			}
+			var selectedcode=code.slice(linestart,lineend).split("\n")
+			if(e.shiftKey){
+				for(a=0;a<selectedcode.length;a++){
+					selectedcode[a]=selectedcode[a].replace(/^(\t|\ \ ?)/,"")
+				}
+			}
+			else{
+				for(a=0;a<selectedcode.length;a++){
+					selectedcode[a]="  "+selectedcode[a]
+				}
+			}
+			var newcode=selectedcode.join("\n")
+			codeinput.value=code.slice(0,linestart)+newcode+code.slice(lineend)
+			codeinput.setSelectionRange(linestart,linestart+newcode.length)
+			e.preventDefault()
+		}
+		else if(keycode===13){
+			if(selectionstart===selectionend){
+				code=codeinput.value
+				if(selectionstart===code.length || code.charCodeAt(selectionstart)===10 || code.charCodeAt(selectionstart)===13){
+					linestart=code.lastIndexOf("\n",selectionstart-1)+1
+					var indent="\n"+code.slice(linestart,selectionstart).replace(/^([\t\ ]*)[\s\S]*$/,"$1")
+					code=code.slice(0,selectionstart)+indent+code.slice(selectionstart)
+					codeinput.value=code
+					var newselectspot=indent.length+selectionstart
+					codeinput.setSelectionRange(newselectspot,newselectspot)
+					e.preventDefault()
+				}
+			}
+		}
+	}
+	var togenerate=false
+	function statechanged(){
+		if(!togenerate){
+			togenerate=true
+			setTimeout(generatelink,1000)
+		}
+	}
+	function generatelink(){
+		var inisstring=document.getElementById("intypestring").checked
+		var outisstring=document.getElementById("outtypestring").checked
+		var code=document.getElementById("codeinput").value
+		var input=document.getElementById("inarea").value
+		location.hash=kissc.compress(JSON.stringify([inisstring,outisstring,code,input]),6)
+		togenerate=false
+	}
+	function xs128p(s00,s01,s10,s11){
+		var time=+new Date()
+		if(typeof s00!=="number"){
+			s00=time
+		}
+		if(typeof s01!=="number"){
+			s01=(time/0x100000000)
+		}
+		if(typeof s10!=="number"){
+			s10=(Math.random()*0x100000000)
+		}
+		if(typeof s11!=="number"){
+			s11=(Math.random()*0x100000000)
+		}
+		s00=s00|0
+		s01=s01|0
+		s10=s10|0
+		s11=s11|0
+		return generate
+		function generate(limit){
+			var x0=s00
+			var x1=s01
+			var y0=s10
+			var y1=s11
+			s00=y0
+			s01=y1
+			x1^=(x1<<23)^(x0>>>9)
+			x0^=(x0<<23)
+			s10=x0^y0^(x0>>>18)^(x1<<14)^(y0>>>5)^(y1<<27)
+			s11=x1^y1^(x1>>>18)^(y1>>>5)
+			var r0=((s10+y0)^0x80000000)+0x80000000
+			var r1=((s11+y1+(((s10<0)+(y0<0)+(r0<0x80000000))>>>1))^0x80000000)+0x80000000
+			if(limit){
+				return (((r1*0x10000+r0>>>16)%limit)*0x10000+(r0&0xffff))%limit
+			}
+			else{
+				return (r1*0x200000+(r0>>>11))/0x20000000000000
+			}
+		}
+	}
+</script>
+</body>
+</html>
