@@ -1,0 +1,78 @@
+//Read the input stream and write it to output.
+moreinput: int invalue = in()
+if invalue
+  out(invalue)
+  goto moreinput
+out(10)
+out(10)
+
+//Compute the first 100 primes.
+arr primes
+dim primes[100]
+int primecount
+int candidate = 2
+while primecount < 100
+  int divisor = 2
+  nextdivisor:
+  if divisor * divisor <= candidate
+    if candidate % divisor
+      divisor = divisor + 1
+      goto nextdivisor
+    else
+      goto notprime
+  primes[primecount] = candidate
+  primecount = primecount + 1
+  notprime:
+  candidate = candidate + 1
+
+//Write the primes to output
+int i
+while i < 100
+  numberout(primes[i])
+  out(10)
+  i = i + 1
+
+//Draw a Sierpinski fractal.
+arr fractal
+dim fractal[27 * 27]
+sierpinski(0, 27)
+int y = 0
+while y < 27
+  int x = 0
+  while x < 27
+    if fractal[x + 27 * y]
+      out(48)
+    else
+      out(32)
+    x = x + 1
+  out(10)
+  y = y + 1
+function sierpinski(int position, int sidelength)
+  if sidelength = 1
+    fractal[position] = 1
+  else
+    sidelength = sidelength / 3
+    int x = 0
+    while x < 3
+      int y = 0
+      while y < 3
+        if !(x = 1 && y = 1)
+          sierpinski(position + x * sidelength + y * 27 * sidelength, sidelength)
+        y = y + 1
+      x = x + 1
+
+//Count the number of bits in the numbers from -100 to 100.
+i = -100
+while i <= 100
+  numberout(i)
+  out(58)
+  out(32)
+  numberout(bitcount(i))
+  out(10)
+  i = i + 1
+function bitcount(int number)
+  int bits=0
+  while number
+    bits = bits + (number & 1)
+    number = number >>> 1
+  return bits
